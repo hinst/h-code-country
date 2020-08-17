@@ -1,0 +1,1 @@
+jlink --output java-runtime --add-modules java.base --compress=2 --strip-debug --no-man-pages --no-header-files
