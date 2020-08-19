@@ -12,15 +12,23 @@ class GitProcess(private val command: List<String>, private val directory: Strin
         override fun toString(): String =
                 "+$insertionCount -$deletionCount $filePath"
     }
-    class CommitSummaryRow(val hash: String, val parentHashes: List<String>)
+    class LogEntryRow(val commitHash: String, val parentHashes: List<String>) {
+        override fun toString(): String {
+            return "$commitHash <- $parentHashes"
+        }
+    }
 
     companion object {
         private const val commandName = "git"
-        const val emptyHash = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
         /** @return list of commit hashes */
-        fun readLog(directory: String): List<String> =
-                GitProcess(listOf(commandName, "log", "--format=%H"), directory).run()
+        fun readLog(directory: String): List<LogEntryRow> {
+            val lines = GitProcess(listOf(commandName, "log", "--format=%H %P"), directory).run()
+            return lines.stream().filter { line -> line.isNotBlank() }
+                    .map { line -> line.split(' ')}
+                    .map { parts -> LogEntryRow(parts[0], parts.subList(1, parts.size) )}
+                    .collect(Collectors.toList())
+        }
 
         fun readCommitDate(directory: String, commitHash: String): Instant {
             val process = GitProcess(listOf(commandName, "show", "--format=%at", "--quiet", commitHash), directory)
@@ -29,12 +37,23 @@ class GitProcess(private val command: List<String>, private val directory: Strin
 
         /** @return (insertions, deletions, filePath) */
         fun readDiffSummary(directory: String, commitHashes: Pair<String, String>): List<DiffSummaryRow> {
-            val process = GitProcess(listOf(commandName, "diff", "--numstat", commitHashes.first, commitHashes.second), directory)
-            return process.run().stream()
+            val command = listOf(commandName, "diff", "--numstat", commitHashes.first, commitHashes.second)
+            val lines = GitProcess(command, directory).run()
+            return lines.stream()
                     .filter { line -> line.isNotBlank() }
                     .map { line -> line.split(' ', '\t') }
-                    .map { parts -> DiffSummaryRow(parts[0].toLong(), parts[1].toLong(), parts[2]) }
+                    .map { parts ->
+                        DiffSummaryRow(
+                            diffSummaryPartToLong(parts[0]),
+                            diffSummaryPartToLong(parts[1]),
+                            parts[2]
+                        )
+                    }
                     .collect(Collectors.toList())
+        }
+
+        private fun diffSummaryPartToLong(text: String): Long {
+            return if (text == "-") -1 else text.toLong()
         }
     }
 
