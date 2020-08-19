@@ -1,22 +1,21 @@
 package h.code.country
 
-import java.io.BufferedReader
-import java.io.File
-import java.io.InputStreamReader
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.ZonedDateTime
 
-class RepoReader(val filePath: String) {
-    fun read() {
-        val process = ProcessBuilder(gitCommand, "log").directory(File(filePath)).start();
-        val input = BufferedReader(InputStreamReader(process.inputStream))
-        val errorInput = BufferedReader(InputStreamReader(process.errorStream))
-        val lines = input.lines()
-        for (line in lines) {
-            println(line)
+class RepoReader(private val directory: String) {
+    private val currentTimeZone: ZoneId = OffsetDateTime.now().toZonedDateTime().zone
+
+    fun readLog() {
+        val commitHashes = GitProcess.readLog(directory).reversed()
+        println(commitHashes)
+        var olderCommitHash = GitProcess.emptyHash
+        for (commitHash in commitHashes) {
+            val commitDate = ZonedDateTime.ofInstant(GitProcess.readCommitDate(directory, commitHash), currentTimeZone)
+            val diffSummary = GitProcess.readDiffSummary(directory, Pair(olderCommitHash, commitHash))
+            println("$commitHash $commitDate $diffSummary")
+            olderCommitHash = commitHash
         }
-        val errors = errorInput.lines()
-        for (error in errors) {
-            println(error)
-        }
-        process.waitFor()
     }
 }
